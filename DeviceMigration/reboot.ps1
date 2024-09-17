@@ -14,133 +14,83 @@ Jesse Weimer
 
 $ErrorActionPreference = "SilentlyContinue"
 
-# log function
-function log()
-{
-    [Cmdletbinding()]
-    Param(
-        [Parameter(Mandatory=$true)]
-        [string]$message
-    )
-    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss tt"
-    Write-Output "$timestamp - $message"
-}
+# Import functions
+. "$((Get-location).path)\functions.ps1"
 
-# FUNCTION: exitScript
-# DESCRIPTION: Exits the script with error code and takes action depending on the error code.
-function exitScript()
-{
-    [Cmdletbinding()]
-    Param(
-        [Parameter(Mandatory=$true)]
-        [int]$exitCode,
-        [Parameter(Mandatory=$true)]
-        [string]$functionName,
-        [array]$tasks = @("reboot","postMigrate")
-    )
-    if($exitCode -eq 1)
-    {
-        log "Exiting script with critical error on $($functionName)."
-        log "Disabling tasks..."
-        foreach($task in $tasks)
-        {
-            Disable-ScheduledTask -TaskName $task -Verbose
-            log "Disabled $($task) task."
-        }
-        log "Enabling password logon provider..."
-        reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\Credential Providers\{60b78e88-ead8-445c-9cfd-0b87f74ea6cd}" /v "Disabled" /t REG_DWORD /d 0 /f | Out-Host
-        log "Enabled logon provider."
-        log "Rebooting device..."
-        Stop-Transcript
-        shutdown -r -t 30
-    }
-    else
-    {
-        log "Migration script failed.  Review logs at C:\ProgramData\Microsoft\IntuneManagementExtension\Logs"
-    }
-}
-
-# Import config settings from JSON file
-$config = Get-Content "C:\ProgramData\IntuneMigration\config.json" | ConvertFrom-Json
+# Initialize script
+Initialize-Script
 
 # Start Transcript
-Start-Transcript -Path "$($config.logPath)\reboot.log" -Verbose
-log "Starting Reboot.ps1..."
+Start-Transcript -Path "$($config.localPath)\reboot.log" -Verbose
+Write-Log "Starting Reboot.ps1..."
 
 # Initialize script
 $localPath = $config.localPath
-if(!(Test-Path $localPath))
-{
-    log "$($localPath) does not exist.  Creating..."
+if (!(Test-Path $localPath)) {
+    Write-Log "$($localPath) does not exist.  Creating..."
     mkdir $localPath
 }
-else
-{
-    log "$($localPath) already exists."
+else {
+    Write-Log "$($localPath) already exists."
 }
 
 # Check context
 $context = whoami
-log "Running as $($context)"
+Write-Log "Running as $($context)"
 
 # disable reboot task
-log "Disabling reboot task..."
+Write-Log "Disabling reboot task..."
 Disable-ScheduledTask -TaskName "Reboot"
-log "Reboot task disabled"
+Write-Log "Reboot task disabled"
 
 # disable auto logon
 Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" -Name "AutoAdminLogon" -Value 0 -Verbose
-log "Auto logon enabled."
+Write-Log "Auto logon enabled."
 
 # set new wallpaper
 $wallpaper = (Get-ChildItem -Path $config.localPath -Filter "*.jpg" -Recurse).FullName
-if($wallpaper)
-{
-    log "Setting wallpaper..."
+if ($wallpaper) {
+    Write-Log "Setting wallpaper..."
     Copy-Item -Path $wallpaper -Destination "C:\Windows\Web\Wallpaper" -Force
     $imgPath = "C:\Windows\Web\Wallpaper\$($wallpaper | Split-Path -Leaf)"
     [string]$desktopScreenPath = "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP"
 
-    log "Setting Lock screen wallpaper..."
+    Write-Log "Setting Lock screen wallpaper..."
     reg.exe add $desktopScreenPath /v "DesktopImagePath" /t REG_SZ /d $imgPath /f | Out-Host
     reg.exe add $desktopScreenPath /v "DesktopImageStatus" /t REG_DWORD /d 1 /f | Out-Host
 }
 
 # Retrieve variables from registry
-log "Retrieving variables from registry..."
+Write-Log "Retrieving variables from registry..."
 $regKey = "Registry::$($config.regPath)"
 $values = Get-ItemProperty -Path $regKey
 $values.PSObject.Properties | ForEach-Object {
     $name = $_.Name
     $value = $_.Value
-    if(![string]::IsNullOrEmpty($value))
-    {
-        log "Retrieved $($name): $value"
+    if (![string]::IsNullOrEmpty($value)) {
+        Write-Log "Retrieved $($name): $value"
         New-Variable -Name $name -Value $value -Force
     }
-    else
-    {
-        log "Error retrieving $name"
+    else {
+        Write-Log "Error retrieving $name"
         exitScript -exitCode 1 -functionName "retrieveVariables"
     }
 }
 
 
 # Remove aadBrokerPlugin from profile
-$aadBrokerPath = (Get-ChildItem -Path "$($OLD_profilePath)\AppData\Local\Packages" -Recurse | Where-Object {$_.Name -match "Microsoft.AAD.BrokerPlugin_*"}).FullName
-if($aadBrokerPath)
-{
-    log "Removing aadBrokerPlugin from profile..."
+$aadBrokerPath = (Get-ChildItem -Path "$($OLD_profilePath)\AppData\Local\Packages" -Recurse | Where-Object { $_.Name -match "Microsoft.AAD.BrokerPlugin_*" }).FullName
+if ($aadBrokerPath) {
+    Write-Log "Removing aadBrokerPlugin from profile..."
     Remove-Item -Path $aadBrokerPath -Recurse -Force
-    log "aadBrokerPlugin removed"
+    Write-Log "aadBrokerPlugin removed"
 }
-else
-{
-    log "aadBrokerPlugin not found"
+else {
+    Write-Log "aadBrokerPlugin not found"
 }
 
 # Create new user profile
-log "Creating $($NEW_SAMName) profile..."
+Write-Log "Creating $($NEW_SAMName) profile..."
 Add-Type -TypeDefinition @"
 using System;
 using System.Security.Principal;
@@ -158,12 +108,13 @@ namespace UserProfile {
 }
 "@
 
-$sb      = New-Object System.Text.StringBuilder(260)
+$sb = New-Object System.Text.StringBuilder(260)
 $pathLen = $sb.Capacity
 
 try {
     $CreateProfileReturn = [UserProfile.Class]::CreateProfile($NEW_SID, $NEW_SAMName, $sb, $pathLen)
-} catch {
+}
+catch {
     Write-Error $_.Exception.Message
 }
 
@@ -180,61 +131,51 @@ switch ($CreateProfileReturn) {
 }
 
 # Delete New profile
-log "Deleting new profile..."
-$newProfile = Get-CimInstance -ClassName Win32_UserProfile | Where-Object {$_.SID -eq $NEW_SID}
+Write-Log "Deleting new profile..."
+$newProfile = Get-CimInstance -ClassName Win32_UserProfile | Where-Object { $_.SID -eq $NEW_SID }
 Remove-CimInstance -InputObject $newProfile -Verbose | Out-Null
-log "New profile deleted."
+Write-Log "New profile deleted."
 
 # Change ownership of user profile
-log "Changing ownership of user profile..."
-$currentProfile = Get-CimInstance -ClassName Win32_UserProfile | Where-Object {$_.SID -eq $OLD_SID}
+Write-Log "Changing ownership of user profile..."
+$currentProfile = Get-CimInstance -ClassName Win32_UserProfile | Where-Object { $_.SID -eq $OLD_SID }
 $changes = @{
     NewOwnerSID = $NEW_SID
-    Flags = 0
+    Flags       = 0
 }
 $currentProfile | Invoke-CimMethod -MethodName ChangeOwner -Arguments $changes
 Start-Sleep -Seconds 1
 
 # Cleanup logon cache
-function cleanupLogonCache()
-{
+function cleanupLogonCache() {
     Param(
         [string]$logonCache = "HKLM:\SOFTWARE\Microsoft\IdentityStore\LogonCache",
         [string]$oldUPN = $OLD_UPN
     )
-    log "Cleaning up logon cache..."
+    Write-Log "Cleaning up logon cache..."
     $logonCacheGUID = (Get-ChildItem -Path $logonCache | Select-Object Name | Split-Path -Leaf).trim('{}')
-    foreach($GUID in $logonCacheGUID)
-    {
+    foreach ($GUID in $logonCacheGUID) {
         $subKeys = Get-ChildItem -Path "$logonCache\$GUID" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name | Split-Path -Leaf
-        if(!($subKeys))
-        {
-            log "No subkeys found for $GUID"
+        if (!($subKeys)) {
+            Write-Log "No subkeys found for $GUID"
             continue
         }
-        else
-        {
+        else {
             $subKeys = $subKeys.trim('{}')
-            foreach($subKey in $subKeys)
-            {
-                if($subKey -eq "Name2Sid" -or $subKey -eq "SAM_Name" -or $subKey -eq "Sid2Name")
-                {
+            foreach ($subKey in $subKeys) {
+                if ($subKey -eq "Name2Sid" -or $subKey -eq "SAM_Name" -or $subKey -eq "Sid2Name") {
                     $subFolders = Get-ChildItem -Path "$logonCache\$GUID\$subKey" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name | Split-Path -Leaf
-                    if(!($subFolders))
-                    {
-                        log "Error - no sub folders found for $subKey"
+                    if (!($subFolders)) {
+                        Write-Log "Error - no sub folders found for $subKey"
                         continue
                     }
-                    else
-                    {
+                    else {
                         $subFolders = $subFolders.trim('{}')
-                        foreach($subFolder in $subFolders)
-                        {
+                        foreach ($subFolder in $subFolders) {
                             $cacheUsername = Get-ItemPropertyValue -Path "$logonCache\$GUID\$subKey\$subFolder" -Name "IdentityName" -ErrorAction SilentlyContinue
-                            if($cacheUsername -eq $oldUserName)
-                            {
+                            if ($cacheUsername -eq $oldUserName) {
                                 Remove-Item -Path "$logonCache\$GUID\$subKey\$subFolder" -Recurse -Force
-                                log "Registry key deleted: $logonCache\$GUID\$subKey\$subFolder"
+                                Write-Log "Registry key deleted: $logonCache\$GUID\$subKey\$subFolder"
                                 continue                                       
                             }
                         }
@@ -246,58 +187,47 @@ function cleanupLogonCache()
 }
 
 # run cleanupLogonCache
-log "Running cleanupLogonCache..."
-try
-{
+Write-Log "Running cleanupLogonCache..."
+try {
     cleanupLogonCache
-    log "cleanupLogonCache completed"
+    Write-Log "cleanupLogonCache completed"
 }
-catch
-{
+catch {
     $message = $_.Exception.Message
-    log "Failed to run cleanupLogonCache: $message"
-    log "Exiting script..."
+    Write-Log "Failed to run cleanupLogonCache: $message"
+    Write-Log "Exiting script..."
     exitScript -exitCode 1 -functionName "cleanupLogonCache"
 }
 
 # cleanup identity store cache
-function cleanupIdentityStore()
-{
+function cleanupIdentityStore() {
     Param(
         [string]$idCache = "HKLM:\SOFTWARE\Microsoft\IdentityStore\Cache",
         [string]$oldUserName = $OLD_UPN
     )
-    log "Cleaning up identity store cache..."
+    Write-Log "Cleaning up identity store cache..."
     $idCacheKeys = (Get-ChildItem -Path $idCache | Select-Object Name | Split-Path -Leaf).trim('{}')
-    foreach($key in $idCacheKeys)
-    {
+    foreach ($key in $idCacheKeys) {
         $subKeys = Get-ChildItem -Path "$idCache\$key" -ErrorAction SilentlyContinue | Select-Object Name | Split-Path -Leaf
-        if(!($subKeys))
-        {
-            log "No keys listed under '$idCache\$key' - skipping..."
+        if (!($subKeys)) {
+            Write-Log "No keys listed under '$idCache\$key' - skipping..."
             continue
         }
-        else
-        {
+        else {
             $subKeys = $subKeys.trim('{}')
-            foreach($subKey in $subKeys)
-            {
+            foreach ($subKey in $subKeys) {
                 $subFolders = Get-ChildItem -Path "$idCache\$key\$subKey" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name | Split-Path -Leaf
-                if(!($subFolders))
-                {
-                    log "No subfolders detected for $subkey- skipping..."
+                if (!($subFolders)) {
+                    Write-Log "No subfolders detected for $subkey- skipping..."
                     continue
                 }
-                else
-                {
+                else {
                     $subFolders = $subFolders.trim('{}')
-                    foreach($subFolder in $subFolders)
-                    {
+                    foreach ($subFolder in $subFolders) {
                         $idCacheUsername = Get-ItemPropertyValue -Path "$idCache\$key\$subKey\$subFolder" -Name "UserName" -ErrorAction SilentlyContinue
-                        if($idCacheUsername -eq $oldUserName)
-                        {
+                        if ($idCacheUsername -eq $oldUserName) {
                             Remove-Item -Path "$idCache\$key\$subKey\$subFolder" -Recurse -Force
-                            log "Registry path deleted: $idCache\$key\$subKey\$subFolder"
+                            Write-Log "Registry path deleted: $idCache\$key\$subKey\$subFolder"
                             continue
                         }
                     }
@@ -308,129 +238,101 @@ function cleanupIdentityStore()
 }
 
 # run cleanup identity store cache if not domain joined
-if($OLD_domainJoined -eq "NO")
-{
-    log "Running cleanupIdentityStore..."
-    try
-    {
+if ($OLD_domainJoined -eq "NO") {
+    Write-Log "Running cleanupIdentityStore..."
+    try {
         cleanupIdentityStore
-        log "cleanupIdentityStore completed"
+        Write-Log "cleanupIdentityStore completed"
     }
-    catch
-    {
+    catch {
         $message = $_.Exception.Message
-        log "Failed to run cleanupIdentityStore: $message"
-        log "Exiting script..."
+        Write-Log "Failed to run cleanupIdentityStore: $message"
+        Write-Log "Exiting script..."
         exitScript -exitCode 1 -functionName "cleanupIdentityStore"
     }
 }
-else
-{
-    log "Machine is domain joined - skipping cleanupIdentityStore."
+else {
+    Write-Log "Machine is domain joined - skipping cleanupIdentityStore."
 }
 
 # update samname in identityStore LogonCache (this is required when displaynames are the same in both tenants, and new samname gets random characters added at the end)
-function updateSamNameLogonCache()
-{
+function updateSamNameLogonCache() {
     Param(
         [string]$logonCache = "HKLM:\SOFTWARE\Microsoft\IdentityStore\LogonCache",
         [string]$targetSAMName = $OLD_SAMName
     )
 
-    if($NEW_SAMName -like "$($OLD_SAMName)_*")
-    {
-        log "New user is $NEW_SAMName, which is the same as $OLD_SAMName with _##### appended to the end. Removing appended characters on SamName in LogonCache registry..."
+    if ($NEW_SAMName -like "$($OLD_SAMName)_*") {
+        Write-Log "New user is $NEW_SAMName, which is the same as $OLD_SAMName with _##### appended to the end. Removing appended characters on SamName in LogonCache registry..."
 
         $logonCacheGUID = (Get-ChildItem -Path $logonCache | Select-Object Name | Split-Path -Leaf).trim('{}')
-        foreach($GUID in $logonCacheGUID)
-        {
+        foreach ($GUID in $logonCacheGUID) {
             $subKeys = Get-ChildItem -Path "$logonCache\$GUID" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name | Split-Path -Leaf
-            if(!($subKeys))
-            {
-                log "No subkeys found for $GUID"
+            if (!($subKeys)) {
+                Write-Log "No subkeys found for $GUID"
                 continue
             }
-            else
-            {
+            else {
                 $subKeys = $subKeys.trim('{}')
-                foreach($subKey in $subKeys)
-                {
-                    if($subKey -eq "Name2Sid")
-                    {
+                foreach ($subKey in $subKeys) {
+                    if ($subKey -eq "Name2Sid") {
                         $subFolders = Get-ChildItem -Path "$logonCache\$GUID\$subKey" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name | Split-Path -Leaf
-                        if(!($subFolders))
-                        {
-                            log "Error - no sub folders found for $subKey"
+                        if (!($subFolders)) {
+                            Write-Log "Error - no sub folders found for $subKey"
                             continue
                         }
-                        else
-                        {
+                        else {
                             $subFolders = $subFolders.trim('{}')
-                            foreach($subFolder in $subFolders)
-                            {
+                            foreach ($subFolder in $subFolders) {
                                 $detectedUserSID = Get-ItemProperty -Path "$logonCache\$GUID\$subKey\$subFolder" | Select-Object -ExpandProperty "Sid" -ErrorAction SilentlyContinue
-                                if($detectedUserSID -eq $NEW_SID)
-                                {
+                                if ($detectedUserSID -eq $NEW_SID) {
                                     Set-ItemProperty -Path "$logonCache\$GUID\$subKey\$subFolder" -Name "SAMName" -Value $targetSAMName -Force
-                                    log "Attempted to update SAMName value (in Name2Sid registry folder) to '$targetSAMName'."
+                                    Write-Log "Attempted to update SAMName value (in Name2Sid registry folder) to '$targetSAMName'."
                                     continue                                       
                                 }
-                                else
-                                {
-                                    log "Detected Sid '$detectedUserSID' is for different user - skipping Sid in Name2Sid registry folder..."
+                                else {
+                                    Write-Log "Detected Sid '$detectedUserSID' is for different user - skipping Sid in Name2Sid registry folder..."
                                 }
                             }
                         }
                     }
-                    elseif($subKey -eq "SAM_Name")
-                    {
+                    elseif ($subKey -eq "SAM_Name") {
                         $subFolders = Get-ChildItem -Path "$logonCache\$GUID\$subKey" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name | Split-Path -Leaf
-                        if(!($subFolders))
-                        {
-                            log "Error - no sub folders found for $subKey"
+                        if (!($subFolders)) {
+                            Write-Log "Error - no sub folders found for $subKey"
                             continue
                         }
-                        else
-                        {
+                        else {
                             $subFolders = $subFolders.trim('{}')
-                            foreach($subFolder in $subFolders)
-                            {
+                            foreach ($subFolder in $subFolders) {
                                 $detectedUserSID = Get-ItemProperty -Path "$logonCache\$GUID\$subKey\$subFolder" | Select-Object -ExpandProperty "Sid" -ErrorAction SilentlyContinue
-                                if($detectedUserSID -eq $NEW_SID)
-                                {
+                                if ($detectedUserSID -eq $NEW_SID) {
                                     Rename-Item "$logonCache\$GUID\$subKey\$subFolder" -NewName $targetSAMName -Force
-                                    log "Attempted to update SAM_Name key name (in SAM_Name registry folder) to '$targetSAMName'."
+                                    Write-Log "Attempted to update SAM_Name key name (in SAM_Name registry folder) to '$targetSAMName'."
                                     continue                                       
                                 }
-                                else
-                                {
-                                    log "Skipping different user in SAM_Name registry folder (User: $subFolder, SID: $detectedUserSID)..."
+                                else {
+                                    Write-Log "Skipping different user in SAM_Name registry folder (User: $subFolder, SID: $detectedUserSID)..."
                                 }
                             }
                         }
                     }
-                    elseif($subKey -eq "Sid2Name")
-                    {
+                    elseif ($subKey -eq "Sid2Name") {
                         $subFolders = Get-ChildItem -Path "$logonCache\$GUID\$subKey" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name | Split-Path -Leaf
-                        if(!($subFolders))
-                        {
-                            log "Error - no sub folders found for $subKey"
+                        if (!($subFolders)) {
+                            Write-Log "Error - no sub folders found for $subKey"
                             continue
                         }
-                        else
-                        {
+                        else {
                             $subFolders = $subFolders.trim('{}')
-                            foreach($subFolder in $subFolders)
-                            {
-                                if($subFolder -eq $NEW_SID)
-                                {
+                            foreach ($subFolder in $subFolders) {
+                                if ($subFolder -eq $NEW_SID) {
                                     Set-ItemProperty -Path "$logonCache\$GUID\$subKey\$subFolder" -Name "SAMName" -Value $targetSAMName -Force
-                                    log "Attempted to update SAM_Name value (in Sid2Name registry folder) to '$targetSAMName'."
+                                    Write-Log "Attempted to update SAM_Name value (in Sid2Name registry folder) to '$targetSAMName'."
                                     continue                                       
                                 }
-                                else
-                                {
-                                    log "Skipping different user SID ($subFolder) in Sid2Name registry folder..."
+                                else {
+                                    Write-Log "Skipping different user SID ($subFolder) in Sid2Name registry folder..."
                                 }
                             }
                         }
@@ -439,70 +341,56 @@ function updateSamNameLogonCache()
             }
         }
     }
-    else
-    {
-        log "New username is $NEW_SAMName, which does not match older username ($OLD_SAMName) with _##### appended to end. SamName LogonCache registry will not be updated."
+    else {
+        Write-Log "New username is $NEW_SAMName, which does not match older username ($OLD_SAMName) with _##### appended to end. SamName LogonCache registry will not be updated."
     }
 }
 
 # run updateSamNameLogonCache
-log "Running updateSamNameLogonCache..."
-try
-{
+Write-Log "Running updateSamNameLogonCache..."
+try {
     updateSamNameLogonCache
-    log "updateSamNameLogonCache completed"
+    Write-Log "updateSamNameLogonCache completed"
 }
-catch
-{
+catch {
     $message = $_.Exception.Message
-    log "Failed to run updateSamNameLogonCache: $message"
-    log "Exiting script..."
+    Write-Log "Failed to run updateSamNameLogonCache: $message"
+    Write-Log "Exiting script..."
     exitScript -exitCode 1 -functionName "updateSamNameLogonCache"
 }
 
 # update samname in identityStore Cache (this is required when displaynames are the same in both tenants, and new samname gets random characters added at the end)
-function updateSamNameIdentityStore()
-{
+function updateSamNameIdentityStore() {
     Param(
         [string]$idCache = "HKLM:\Software\Microsoft\IdentityStore\Cache",
         [string]$targetSAMName = $OLD_SAMName
     )
-    if($NEW_SAMName -like "$($OLD_SAMName)_*")
-    {
-        log "Cleaning up identity store cache..."
+    if ($NEW_SAMName -like "$($OLD_SAMName)_*") {
+        Write-Log "Cleaning up identity store cache..."
         $idCacheKeys = (Get-ChildItem -Path $idCache | Select-Object Name | Split-Path -Leaf).trim('{}')
-        foreach($key in $idCacheKeys)
-        {
+        foreach ($key in $idCacheKeys) {
             $subKeys = Get-ChildItem -Path "$idCache\$key" -ErrorAction SilentlyContinue | Select-Object Name | Split-Path -Leaf
-            if(!($subKeys))
-            {
-                log "No keys listed under '$idCache\$key' - skipping..."
+            if (!($subKeys)) {
+                Write-Log "No keys listed under '$idCache\$key' - skipping..."
                 continue
             }
-            else
-            {
+            else {
                 $subKeys = $subKeys.trim('{}')
-                foreach($subKey in $subKeys)
-                {
+                foreach ($subKey in $subKeys) {
                     $subFolders = Get-ChildItem -Path "$idCache\$key\$subKey" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name | Split-Path -Leaf
-                    if(!($subFolders))
-                    {
-                        log "No subfolders detected for $subkey- skipping..."
+                    if (!($subFolders)) {
+                        Write-Log "No subfolders detected for $subkey- skipping..."
                         continue
                     }
-                    else
-                    {
+                    else {
                         $subFolders = $subFolders.trim('{}')
-                        foreach($subFolder in $subFolders)
-                        {
-                            if($subFolder -eq $NEW_SID)
-                            {
+                        foreach ($subFolder in $subFolders) {
+                            if ($subFolder -eq $NEW_SID) {
                                 Set-ItemProperty -Path "$idCache\$key\$subKey\$subFolder" -Name "SAMName" -Value $targetSAMName -Force
-                                log "Attempted to update SAMName value to $targetSAMName."
+                                Write-Log "Attempted to update SAMName value to $targetSAMName."
                             }
-                            else
-                            {
-                                log "Skipping different user SID ($subFolder) in $subKey registry folder..."
+                            else {
+                                Write-Log "Skipping different user SID ($subFolder) in $subKey registry folder..."
                             }
                         }
                     }
@@ -510,53 +398,46 @@ function updateSamNameIdentityStore()
             }
         }
     }
-    else
-    {
-        log "New username is $NEW_SAMName, which does not match older username ($OLD_SAMName) with _##### appended to end. SamName IdentityStore registry will not be updated."
+    else {
+        Write-Log "New username is $NEW_SAMName, which does not match older username ($OLD_SAMName) with _##### appended to end. SamName IdentityStore registry will not be updated."
     }
 }
 
 # run updateSamNameIdentityStore if not domain joined
-if($OLD_domainJoined -eq "NO")
-{
-    log "Running updateSamNameIdentityStore..."
-    try
-    {
+if ($OLD_domainJoined -eq "NO") {
+    Write-Log "Running updateSamNameIdentityStore..."
+    try {
         updateSamNameIdentityStore
-        log "updateSamNameIdentityStore completed"
+        Write-Log "updateSamNameIdentityStore completed"
     }
-    catch
-    {
+    catch {
         $message = $_.Exception.Message
-        log "Failed to run updateSamNameIdentityStore: $message"
-        log "Exiting script..."
+        Write-Log "Failed to run updateSamNameIdentityStore: $message"
+        Write-Log "Exiting script..."
         exitScript -exitCode 1 -functionName "updateSamNameIdentityStore"
     }
 }
-else
-{
-    log "Machine is domain joined - skipping updateSamNameIdentityStore."
+else {
+    Write-Log "Machine is domain joined - skipping updateSamNameIdentityStore."
 }
 
 # enable logon provider
 reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\Credential Providers\{60b78e88-ead8-445c-9cfd-0b87f74ea6cd}" /v "Disabled" /t REG_DWORD /d 0 /f | Out-Host
-log "Enabled logon provider."
+Write-Log "Enabled logon provider."
 
 # set lock screen caption
-if($config.targetTenant.tenantName)
-{
+if ($config.targetTenant.tenantName) {
     $tenant = $config.targetTenant.tenantName
 }
-else
-{
+else {
     $tenant = $config.sourceTenant.tenantName
 }
 reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v "legalnoticecaption" /t REG_SZ /d "Welcome to $($tenant)" /f | Out-Host 
-reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v "legalnoticetext" /t REG_SZ /d "Please log in with your new email address" /f | Out-Host
-log "Lock screen caption set."
+reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v "legalnoticetext" /t REG_SZ /d "Please Write-Log in with your new email address" /f | Out-Host
+Write-Log "Lock screen caption set."
 
 
-log "Reboot.ps1 complete"
+Write-Log "Reboot.ps1 complete"
 shutdown -r -t 00
 Stop-Transcript
 
