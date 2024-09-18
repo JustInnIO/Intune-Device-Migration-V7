@@ -25,7 +25,7 @@ $ErrorActionPreference = "SilentlyContinue"
 Initialize-Script
 
 # Start Transcript
-Start-Transcript -Path "$($config.localPath)\startMigrate.log" -Verbose
+Start-Transcript -Path "$($config.transcriptsPath)\Transcript-startMigrate.log" -Verbose
 Write-Log "Starting Device Migration V-7..."
 
 # Initialize script
@@ -207,6 +207,7 @@ foreach ($x in $pc.Keys) {
 [object]$headers = $GraphHeaders
 [string]$domainJoined = $pc.domainJoined
 [string]$azureAdJoined = $pc.azureAdJoined
+[string]$deviceName = $pc.hostname
 [string]$regPath = $config.regPath
 [string]$userName = (Get-CimInstance -ClassName Win32_ComputerSystem | Select-Object UserName).UserName
 [string]$SID = (New-Object System.Security.Principal.NTAccount($userName)).Translate([System.Security.Principal.SecurityIdentifier]).Value
@@ -488,8 +489,7 @@ New-LocalUser -Name $migrateAdmin -Password $adminPW -PasswordNeverExpires
 Add-LocalGroupMember -Group $adminGroupName -Member $migrateAdmin
 
 if ($pc.domainJoined -eq "YES") {
-    [string]$hostname = $pc.hostname,
-    [string]$localDomain = $pc.localDomain
+$    [string]$localDomain = $pc.localDomain
 
     # Check for line of sight to domain controller
     $pingCount = 4

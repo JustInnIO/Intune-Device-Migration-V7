@@ -20,8 +20,11 @@ $ErrorActionPreference = "SilentlyContinue"
 # Initialize script
 Initialize-Script
 
+# Wait for Internet for logging
+Wait-ForInternetConnection
+
 # Start Transcript
-Start-Transcript -Path "$($config.logPath)\postMigrate.log" -Verbose
+Start-Transcript -Path "$($config.transcriptsPath)\Transcript-postMigrate.log" -Verbose
 Write-Log "Starting PostMigrate.ps1..."
 
 # Initialize script

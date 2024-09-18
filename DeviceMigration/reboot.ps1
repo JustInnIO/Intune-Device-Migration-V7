@@ -20,8 +20,11 @@ $ErrorActionPreference = "SilentlyContinue"
 # Initialize script
 Initialize-Script
 
+# Wait for Internet for logging
+Wait-ForInternetConnection
+
 # Start Transcript
-Start-Transcript -Path "$($config.localPath)\reboot.log" -Verbose
+Start-Transcript -Path "$($config.transcriptsPath)\Transcript-reboot.log" -Verbose
 Write-Log "Starting Reboot.ps1..."
 
 # Initialize script
@@ -433,7 +436,7 @@ else {
     $tenant = $config.sourceTenant.tenantName
 }
 reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v "legalnoticecaption" /t REG_SZ /d "Welcome to $($tenant)" /f | Out-Host 
-reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v "legalnoticetext" /t REG_SZ /d "Please Write-Log in with your new email address" /f | Out-Host
+reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v "legalnoticetext" /t REG_SZ /d "Please Log in with your new email address" /f | Out-Host
 Write-Log "Lock screen caption set."
 
 

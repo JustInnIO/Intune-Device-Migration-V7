@@ -273,3 +273,37 @@ function exitScript() {
         }
 }
     
+
+function Wait-ForInternetConnection {
+        param (
+                [string]$PingTarget = "google.com", # Default target to check connectivity
+                [int]$TimeoutSeconds = 300, # Maximum wait time in seconds
+                [int]$CheckIntervalSeconds = 5         # Interval between checks in seconds
+        )
+    
+        $elapsedTime = 0
+    
+        # Loop until a successful ping or timeout
+        while ($elapsedTime -lt $TimeoutSeconds) {
+                try {
+                        # Attempt to ping the target
+                        $pingResult = Test-Connection -ComputerName $PingTarget -Count 1 -Quiet
+    
+                        if ($pingResult) {
+                                Write-Log "Internet connection is available."
+                                exit
+                        }
+                        else {
+                                Write-Log "No internet connection detected. Waiting..."
+                        }
+                }
+                catch {
+                        Write-Log "Error during connection check: $_"
+                }
+    
+                # Wait for the specified interval before checking again
+                Start-Sleep -Seconds $CheckIntervalSeconds
+                $elapsedTime += $CheckIntervalSeconds
+        }
+        return "Timed out"
+}
