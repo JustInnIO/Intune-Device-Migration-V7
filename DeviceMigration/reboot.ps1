@@ -51,17 +51,18 @@ Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlo
 Write-Log "Auto logon enabled."
 
 # set new wallpaper
-$wallpaper = (Get-ChildItem -Path $config.localPath -Filter "*.jpg" -Recurse).FullName
-if ($wallpaper) {
-    Write-Log "Setting wallpaper..."
-    Copy-Item -Path $wallpaper -Destination "C:\Windows\Web\Wallpaper" -Force
-    $imgPath = "C:\Windows\Web\Wallpaper\$($wallpaper | Split-Path -Leaf)"
-    [string]$desktopScreenPath = "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP"
+# Tobias: Not required. Comes through Intune policies
+# $wallpaper = (Get-ChildItem -Path $config.localPath -Filter "*.jpg" -Recurse).FullName
+# if ($wallpaper) {
+#     Write-Log "Setting wallpaper..."
+#     Copy-Item -Path $wallpaper -Destination "C:\Windows\Web\Wallpaper" -Force
+#     $imgPath = "C:\Windows\Web\Wallpaper\$($wallpaper | Split-Path -Leaf)"
+#     [string]$desktopScreenPath = "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP"
 
-    Write-Log "Setting Lock screen wallpaper..."
-    reg.exe add $desktopScreenPath /v "DesktopImagePath" /t REG_SZ /d $imgPath /f | Out-Host
-    reg.exe add $desktopScreenPath /v "DesktopImageStatus" /t REG_DWORD /d 1 /f | Out-Host
-}
+#     Write-Log "Setting Lock screen wallpaper..."
+#     reg.exe add $desktopScreenPath /v "DesktopImagePath" /t REG_SZ /d $imgPath /f | Out-Host
+#     reg.exe add $desktopScreenPath /v "DesktopImageStatus" /t REG_DWORD /d 1 /f | Out-Host
+# }
 
 # Retrieve variables from registry
 Write-Log "Retrieving variables from registry..."
