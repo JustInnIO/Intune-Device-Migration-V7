@@ -8,7 +8,7 @@
   <Triggers>
     <LogonTrigger>
       <Enabled>true</Enabled>
-       <Delay>PT1M</Delay>
+      <Delay>PT1M</Delay>
     </LogonTrigger>
   </Triggers>
   <Principals>
@@ -39,7 +39,9 @@
   <Actions Context="Author">
     <Exec>
       <Command>C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe</Command>
-      <Arguments>-executionpolicy bypass -WindowStyle Hidden -file "C:\ProgramData\IntuneMigration\postMigrate.ps1"</Arguments>
+      <Arguments>-executionpolicy bypass -WindowStyle Hidden -file
+        "C:\ProgramData\IntuneMigration\postMigrate.ps1"</Arguments>
+      <WorkingDirectory>C:\ProgramData\IntuneMigration</WorkingDirectory>
     </Exec>
   </Actions>
 </Task>

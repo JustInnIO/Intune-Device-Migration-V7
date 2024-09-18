@@ -23,8 +23,8 @@
     <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
     <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
     <AllowHardTerminate>true</AllowHardTerminate>
-    <StartWhenAvailable>false</StartWhenAvailable>
-    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <RunOnlyIfNetworkAvailable>true</RunOnlyIfNetworkAvailable>
     <IdleSettings>
       <StopOnIdleEnd>true</StopOnIdleEnd>
       <RestartOnIdle>false</RestartOnIdle>
@@ -40,7 +40,9 @@
   <Actions Context="Author">
     <Exec>
       <Command>C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe</Command>
-      <Arguments>-executionpolicy bypass -WindowStyle Hidden -file "C:\ProgramData\IntuneMigration\reboot.ps1"</Arguments>
+      <Arguments>-executionpolicy bypass -WindowStyle Hidden -file
+        "C:\ProgramData\IntuneMigration\reboot.ps1"</Arguments>
+      <WorkingDirectory>C:\ProgramData\IntuneMigration</WorkingDirectory>
     </Exec>
   </Actions>
 </Task>

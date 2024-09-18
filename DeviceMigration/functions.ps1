@@ -276,8 +276,9 @@ function exitScript() {
 
 function Wait-ForInternetConnection {
         param (
-                [string]$PingTarget = "google.com", # Default target to check connectivity
-                [int]$TimeoutSeconds = 300, # Maximum wait time in seconds
+                [string]$Target = "google.com", # Default target to check connectivity
+                [string]$DNSServer = "8.8.8.8", # Default DNS server to use for resolution
+                [int]$TimeoutSeconds = 60, # Maximum wait time in seconds
                 [int]$CheckIntervalSeconds = 5         # Interval between checks in seconds
         )
     
@@ -287,13 +288,12 @@ function Wait-ForInternetConnection {
         while ($elapsedTime -lt $TimeoutSeconds) {
                 try {
                         # Attempt to ping the target
-                        $pingResult = Test-Connection -ComputerName $PingTarget -Count 1 -Quiet
-    
-                        if ($pingResult) {
+                        try {
+                                $dnsResult = Resolve-DnsName -Name $Target -Server $DNSServer -ErrorAction Stop
                                 Write-Log "Internet connection is available."
                                 exit
                         }
-                        else {
+                        catch {
                                 Write-Log "No internet connection detected. Waiting..."
                         }
                 }
