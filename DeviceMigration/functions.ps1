@@ -291,7 +291,8 @@ function Wait-ForInternetConnection {
                         try {
                                 $dnsResult = Resolve-DnsName -Name $Target -Server $DNSServer -ErrorAction Stop
                                 Write-Log "Internet connection is available."
-                                exit
+                                return $true
+
                         }
                         catch {
                                 Write-Log "No internet connection detected. Waiting..."
@@ -305,5 +306,5 @@ function Wait-ForInternetConnection {
                 Start-Sleep -Seconds $CheckIntervalSeconds
                 $elapsedTime += $CheckIntervalSeconds
         }
-        return "Timed out"
+        return $false
 }

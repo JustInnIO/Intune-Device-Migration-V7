@@ -21,7 +21,10 @@ $ErrorActionPreference = "SilentlyContinue"
 Initialize-Script
 
 # Wait for Internet for logging
-Wait-ForInternetConnection
+if (-not (Wait-ForInternetConnection)){
+    Write-Log "No internet connection. Stopping."
+    exit
+}
 
 # Start Transcript
 Start-Transcript -Path "$($config.transcriptsPath)\Transcript-reboot.log" -Verbose

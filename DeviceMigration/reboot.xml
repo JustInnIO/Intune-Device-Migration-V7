@@ -39,7 +39,7 @@
   </Settings>
   <Actions Context="Author">
     <Exec>
-      <Command>C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe</Command>
+      <Command>C:\Windows\System32\WindowsPowerShell\v1.0\cmd.exe</Command>
       <Arguments>-executionpolicy bypass -WindowStyle Hidden -file
         "C:\ProgramData\IntuneMigration\reboot.ps1"</Arguments>
       <WorkingDirectory>C:\ProgramData\IntuneMigration</WorkingDirectory>

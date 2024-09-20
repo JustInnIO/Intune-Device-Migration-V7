@@ -24,6 +24,12 @@ $ErrorActionPreference = "SilentlyContinue"
 # Initialize script
 Initialize-Script
 
+# Wait for Internet for logging
+if (-not (Wait-ForInternetConnection)){
+    Write-Log "No internet connection. Stopping."
+    exit
+}
+
 # Start Transcript
 Start-Transcript -Path "$($config.transcriptsPath)\Transcript-startMigrate.log" -Verbose
 Write-Log "Starting Device Migration V-7..."
@@ -438,7 +444,7 @@ else {
 }
 
 
-# Set migration tasks
+<# # Set migration tasks
 $tasks = @("reboot", "postMigrate")
 foreach ($task in $tasks) {
     $taskPath = "$($config.localPath)\$($task).xml"
@@ -458,7 +464,7 @@ foreach ($task in $tasks) {
             exitScript -exitCode 4 -functionName "schtasks"
         }
     }
-}
+} #>
 
 
 # Leave Azure AD / Entra Join
@@ -483,6 +489,7 @@ else {
 # Leave Domain/Hybrid Join
 $migrateAdmin = "MigrationInProgress"
 $adminPW = generatePassword
+Write-Log "$migrateAdmin password: $($AdminPW | ConvertFrom-SecureString)"
 $adminGroup = Get-CimInstance -Query "Select * From Win32_Group Where LocalAccount = True And SID = 'S-1-5-32-544'"
 $adminGroupName = $adminGroup.Name
 New-LocalUser -Name $migrateAdmin -Password $adminPW -PasswordNeverExpires
@@ -705,7 +712,7 @@ if ($pc.mdm -eq $true) {
 else {
     Write-Log "PC is not MDM enrolled."
 }
-
+<# 
 # FUNCTION: setAutoLogonAdmin
 # DESCRIPTION: Sets the auto logon account for the administrator 
 # PARAMETERS: $username - The username to set auto logon for, $password - The password to set auto logon for.
@@ -735,7 +742,7 @@ if ($targetHeaders) {
 }
 else {
     $tenant = $config.sourceTenant.tenantName
-}
+} #>
 reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v "legalnoticecaption" /t REG_SZ /d "Device Migration in Progress..." /f | Out-Host 
 reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v "legalnoticetext" /t REG_SZ /d "Your PC is being migrated to the $($tenant) tenant and will automatically reboot in 30 seconds.  Please do not power off." /f | Out-Host
 Write-Log "Lock screen caption set successfully."
